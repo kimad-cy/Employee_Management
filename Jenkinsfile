@@ -7,30 +7,28 @@ pipeline {
     }
 
     stages {
-        stage('Clone') {
+        stage('Checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/kimad-cy/Employee_Management'
+                git branch: 'master', url: 'https://github.com/kimad-cy/Employee_Management.git'
             }
         }
 
-        stage('Build & Test') {
+        stage('Build Backend') {
             steps {
-                script {
-                    if (isUnix()) {
-                        sh 'mvn clean package'
-                    } else {
-                        bat 'mvn clean package'
-                    }
+                dir('backend') {
+                    bat 'mvn clean package'
                 }
+            }
+        }
+
+        stage('Archive') {
+            steps {
+                archiveArtifacts artifacts: 'backend/target/*.jar', fingerprint: true
             }
         }
     }
 
     post {
-        always {
-            junit '**/target/surefire-reports/*.xml'
-            archiveArtifacts artifacts: '**/target/*.war', allowEmptyArchive: true
-        }
         success {
             echo '✅ Build succeeded!'
         }
