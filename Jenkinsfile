@@ -9,7 +9,7 @@ pipeline {
     stages {
         stage('Clone') {
             steps {
-                git branch: 'master', url: 'https://github.com/Jakarta-EE-Petclinic/petclinic-javaee7.git'
+                git branch: 'master', url: 'https://github.com/kimad-cy/Employee_Management'
             }
         }
 
