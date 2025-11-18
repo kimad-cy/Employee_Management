@@ -21,6 +21,18 @@ pipeline {
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                dir('backend') {
+                    withSonarQubeEnv('LocalSonar') { // Name of SonarQube server in Jenkins
+                        withCredentials([string(credentialsId: 'SONAR_AUTH_TOKEN', variable: 'SONAR_TOKEN')]) {
+                            bat "mvn sonar:sonar -Dsonar.login=%SONAR_TOKEN%"
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Archive') {
             steps {
                 archiveArtifacts artifacts: 'backend/target/*.jar', fingerprint: true
