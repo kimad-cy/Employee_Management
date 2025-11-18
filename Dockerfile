@@ -5,7 +5,7 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # Copy your compiled .jar file into container
-COPY backend/target/employee-management-app.jar app.jar
+COPY backend/target/employee-management-app-0.0.1-SNAPSHOT.jar
 
 # Open port 8080
 EXPOSE 8080
