@@ -15,7 +15,7 @@ COPY src ./src
 RUN mvn package -DskipTests
 
 # Use a lightweight OpenJDK runtime for the final image
-FROM openjdk:11-jre-slim
+FROM openjdk:11.0.11-jre-slim
 
 # Set the working directory
 WORKDIR /app
