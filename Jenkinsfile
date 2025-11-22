@@ -4,6 +4,7 @@ pipeline {
     tools {
         jdk 'JDK 21'
         maven 'Maven 3'
+        nodejs 'Node 18' // Add Node.js tool if you have it configured in Jenkins
     }
 
     stages {
@@ -17,6 +18,16 @@ pipeline {
             steps {
                 dir('backend') {
                     bat 'mvn clean package'
+                }
+            }
+        }
+
+        stage('Build Frontend') {
+            steps {
+                dir('frontend') {
+                    // Install dependencies and build
+                    bat 'npm install'
+                    bat 'npm run build'
                 }
             }
         }
@@ -36,6 +47,7 @@ pipeline {
         stage('Archive') {
             steps {
                 archiveArtifacts artifacts: 'backend/target/*.jar', fingerprint: true
+                archiveArtifacts artifacts: 'frontend/build/**', fingerprint: true
             }
         }
     }

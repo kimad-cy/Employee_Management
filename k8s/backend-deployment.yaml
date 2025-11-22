@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: kimadcy/employee_management-backend:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_HOST
+              value: "mysql"
+            - name: MYSQL_PORT
+              value: "3306"
+            - name: MYSQL_DB
+              value: "employee_db"
+            - name: MYSQL_USER
+              value: "root"
+            - name: MYSQL_PASSWORD
+              value: "root"
+          ports:
+            - containerPort: 8080
