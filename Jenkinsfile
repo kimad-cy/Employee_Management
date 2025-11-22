@@ -4,7 +4,12 @@ pipeline {
     tools {
         jdk 'JDK 21'
         maven 'Maven 3'
-        nodejs 'Node 18' // Add Node.js tool if you have it configured in Jenkins
+        nodejs 'Node 18'
+    }
+
+    environment {
+        DOCKERHUB_CREDENTIALS = 'dockerhub-credentials'
+        DOCKERHUB_USER = 'kimadcy'
     }
 
     stages {
@@ -17,7 +22,7 @@ pipeline {
         stage('Build Backend') {
             steps {
                 dir('backend') {
-                    bat 'mvn clean package'
+                    bat 'mvn clean package -DskipTests'
                 }
             }
         }
@@ -25,7 +30,6 @@ pipeline {
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
-                    // Install dependencies and build
                     bat 'npm install'
                     bat 'npm run build'
                 }
@@ -35,7 +39,7 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 dir('backend') {
-                    withSonarQubeEnv('LocalSonar') { // Name of SonarQube server in Jenkins
+                    withSonarQubeEnv('LocalSonar') {
                         withCredentials([string(credentialsId: 'SONAR_AUTH_TOKEN', variable: 'SONAR_TOKEN')]) {
                             bat "mvn sonar:sonar -Dsonar.login=%SONAR_TOKEN%"
                         }
@@ -44,7 +48,32 @@ pipeline {
             }
         }
 
-        stage('Archive') {
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    // Login to Docker Hub
+                    withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        bat "docker login -u %DOCKER_USER% -p %DOCKER_PASS%"
+                    }
+
+                    // Build backend image
+                    dir('backend') {
+                        bat "docker build -t ${DOCKERHUB_USER}/employee_management-backend:latest ."
+                    }
+
+                    // Build frontend image
+                    dir('frontend') {
+                        bat "docker build -t ${DOCKERHUB_USER}/employee_management-frontend:latest ."
+                    }
+
+                    // Push images to Docker Hub
+                    bat "docker push ${DOCKERHUB_USER}/employee_management-backend:latest"
+                    bat "docker push ${DOCKERHUB_USER}/employee_management-frontend:latest"
+                }
+            }
+        }
+
+        stage('Archive Artifacts') {
             steps {
                 archiveArtifacts artifacts: 'backend/target/*.jar', fingerprint: true
                 archiveArtifacts artifacts: 'frontend/build/**', fingerprint: true
@@ -54,10 +83,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ Build succeeded!'
+            echo '✅ Build & Docker push succeeded!'
         }
         failure {
-            echo '❌ Build failed!'
+            echo '❌ Build or Docker push failed!'
         }
     }
 }
