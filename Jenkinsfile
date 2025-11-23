@@ -79,7 +79,7 @@ pipeline {
             steps {
                  bat '''
                     REM Start Minikube if not running
-                    minikube status || minikube start
+                    minikube status || minikube start --driver=docker
                     kubectl config use-context minikube
                 '''
             }
