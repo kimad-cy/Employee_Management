@@ -75,6 +75,13 @@ pipeline {
                 }
             }
         }
+        stage('Test Minikube') {
+            steps {
+                bat 'minikube status'
+                bat 'kubectl config current-context'
+            }
+        }
+
 
         stage('Deploy to Minikube') {
             steps {
