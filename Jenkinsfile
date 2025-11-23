@@ -23,19 +23,32 @@ pipeline {
             steps {
                 powershell '''
                     Write-Host "=== Starting Minikube ==="
-                    # Stop and clean up any existing instance
-                    minikube stop
-                    minikube delete
                     
-                    # Start fresh Minikube cluster
-                    minikube start --driver=docker --force --memory=4096 --cpus=2
+                    # Clean up any existing instances
+                    minikube stop 2>&1 | Write-Host
+                    minikube delete 2>&1 | Write-Host
+                    
+                    # Start Minikube with appropriate memory settings
+                    Write-Host "Starting Minikube with 2GB memory..."
+                    minikube start --driver=docker --memory=2048 --cpus=2
+                    
+                    # Configure kubectl context
                     kubectl config use-context minikube
                     
                     # Set up Docker to use Minikube's daemon
-                    minikube docker-env | Invoke-Expression
+                    $envCommand = minikube docker-env
+                    if ($envCommand) {
+                        Invoke-Expression $envCommand
+                        Write-Host "Docker environment configured for Minikube"
+                    } else {
+                        Write-Host "Warning: Could not configure Docker environment"
+                    }
                     
                     # Wait for cluster to be ready
-                    Start-Sleep -Seconds 20
+                    Write-Host "Waiting for cluster to be ready..."
+                    Start-Sleep -Seconds 30
+                    
+                    # Verify cluster status
                     kubectl cluster-info
                     kubectl get nodes
                     Write-Host "=== Minikube Ready ==="
@@ -77,16 +90,10 @@ pipeline {
             }
         }
 
-        stage('Build Docker Images in Minikube') {
+        stage('Build Docker Images') {
             steps {
-                powershell '''
-                    # Ensure we're using Minikube's Docker daemon
-                    minikube docker-env | Invoke-Expression
-                    Write-Host "=== Building Docker Images in Minikube ==="
-                '''
-                
                 script {
-                    // Build backend image using Minikube's Docker daemon
+                    // Build backend image
                     dir('backend') {
                         bat 'docker build -t employee_management-backend:latest .'
                     }
@@ -98,10 +105,7 @@ pipeline {
                         }
                     }
                     
-                    // Pull MySQL image
-                    bat 'docker pull mysql:8'
-                    
-                    // Push to Docker Hub (optional - for backup/registry)
+                    // Push to Docker Hub
                     withCredentials([usernamePassword(
                         credentialsId: "${DOCKERHUB_CREDENTIALS}", 
                         usernameVariable: 'DOCKER_USER', 
@@ -120,6 +124,24 @@ pipeline {
             }
         }
 
+        stage('Load Images to Minikube') {
+            steps {
+                powershell '''
+                    Write-Host "=== Loading Docker Images into Minikube ==="
+                    
+                    # Load images into Minikube
+                    minikube image load employee_management-backend:latest
+                    minikube image load mysql:8
+                    
+                    if (Test-Path "frontend") {
+                        minikube image load employee_management-frontend:latest
+                    }
+                    
+                    Write-Host "Images loaded into Minikube"
+                '''
+            }
+        }
+
         stage('Deploy to Minikube') {
             steps {
                 script {
@@ -130,21 +152,20 @@ pipeline {
                         // Apply all Kubernetes manifests
                         bat 'kubectl apply -f .'
                         
-                        // Wait for deployments to be ready with longer timeouts
+                        // Wait for deployments to be ready
                         script {
                             timeout(time: 5, unit: 'MINUTES') {
-                                bat 'kubectl rollout status deployment/backend --timeout=300s'
-                                bat 'kubectl rollout status deployment/mysql --timeout=300s'
+                                bat 'kubectl wait --for=condition=available deployment/backend --timeout=300s'
+                                bat 'kubectl wait --for=condition=available deployment/mysql --timeout=300s'
                                 
                                 if (fileExists('frontend')) {
-                                    bat 'kubectl rollout status deployment/frontend --timeout=300s'
+                                    bat 'kubectl wait --for=condition=available deployment/frontend --timeout=300s'
                                 }
                             }
                         }
                         
                         // Show detailed status
                         bat 'kubectl get pods,services,deployments'
-                        bat 'kubectl get ingress || echo "No ingress found"'
                     }
                 }
             }
@@ -153,22 +174,16 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 script {
-                    // Wait a bit for services to stabilize
-                    bat 'timeout 30'
-                    
                     // Check pod status
                     bat 'kubectl get pods -o wide'
                     
                     // Check logs for any issues
-                    bat 'kubectl logs -l app=backend --tail=50 || echo "No backend logs yet"'
-                    bat 'kubectl logs -l app=mysql --tail=50 || echo "No MySQL logs yet"'
+                    bat 'kubectl logs -l app=backend --tail=20 || echo "No backend logs yet"'
+                    bat 'kubectl logs -l app=mysql --tail=20 || echo "No MySQL logs yet"'
                     
                     if (fileExists('frontend')) {
-                        bat 'kubectl logs -l app=frontend --tail=50 || echo "No frontend logs yet"'
+                        bat 'kubectl logs -l app=frontend --tail=20 || echo "No frontend logs yet"'
                     }
-                    
-                    // Describe pods if any are not running
-                    bat 'kubectl describe pods || echo "Cannot describe pods"'
                 }
             }
         }
@@ -192,9 +207,6 @@ pipeline {
             script {
                 // Show final status
                 bat 'kubectl get pods,services'
-                bat 'echo "Deployment completed successfully!"'
-                
-                // Get Minikube service URLs
                 bat 'minikube service list || echo "Cannot get service list"'
             }
         }
