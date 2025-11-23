@@ -21,27 +21,38 @@ pipeline {
 
         stage('Start Minikube') {
             steps {
-                powerscript '''
-                    Write-Host "Stopping any existing Minikube instances..."
+                powershell '''
+                    Write-Host "=== Starting Minikube Setup ==="
+                    
+                    # Check if Minikube is running
+                    Write-Host "Checking Minikube status..."
+                    minikube status
+                    
+                    # Stop and delete existing cluster
+                    Write-Host "Cleaning up existing Minikube cluster..."
                     minikube stop
                     minikube delete
                     
-                    Write-Host "Starting fresh Minikube cluster..."
-                    minikube start `
-                        --driver=docker `
-                        --container-runtime=containerd `
-                        --force `
-                        --memory=4096 `
-                        --cpus=2 `
-                        --wait=all
+                    # Start fresh Minikube cluster
+                    Write-Host "Starting new Minikube cluster..."
+                    minikube start --driver=docker --force
                     
-                    Write-Host "Configuring kubectl..."
+                    # Configure kubectl context
+                    Write-Host "Setting kubectl context..."
                     kubectl config use-context minikube
                     
-                    Write-Host "Waiting for cluster to be ready..."
+                    # Wait for cluster to be ready
+                    Write-Host "Waiting for cluster components..."
                     Start-Sleep -Seconds 30
+                    
+                    # Verify cluster status
+                    Write-Host "Cluster information:"
                     kubectl cluster-info
+                    
+                    Write-Host "Node status:"
                     kubectl get nodes
+                    
+                    Write-Host "=== Minikube Setup Complete ==="
                 '''
             }
         }
@@ -55,7 +66,12 @@ pipeline {
         }
 
         stage('Build Frontend') {
-            when { expression { false } }
+            when { 
+                expression { 
+                    // Only run if frontend directory exists
+                    fileExists('frontend') 
+                } 
+            }
             steps {
                 dir('frontend') {
                     bat 'npm install'
@@ -84,18 +100,23 @@ pipeline {
                         bat "docker build -t employee_management-backend:latest ."
                     }
 
-                    // Build frontend image
-                    dir('frontend') {
-                        bat "docker build -t employee_management-frontend:latest ."
+                    // Build frontend image (only if frontend exists)
+                    if (fileExists('frontend')) {
+                        dir('frontend') {
+                            bat "docker build -t employee_management-frontend:latest ."
+                        }
                     }
 
-                    // Optional: push to Docker Hub
+                    // Push to Docker Hub
                     withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         bat "docker login -u %DOCKER_USER% -p %DOCKER_PASS%"
                         bat "docker tag employee_management-backend:latest ${DOCKERHUB_USER}/employee_management-backend:latest"
-                        bat "docker tag employee_management-frontend:latest ${DOCKERHUB_USER}/employee_management-frontend:latest"
                         bat "docker push ${DOCKERHUB_USER}/employee_management-backend:latest"
-                        bat "docker push ${DOCKERHUB_USER}/employee_management-frontend:latest"
+                        
+                        if (fileExists('frontend')) {
+                            bat "docker tag employee_management-frontend:latest ${DOCKERHUB_USER}/employee_management-frontend:latest"
+                            bat "docker push ${DOCKERHUB_USER}/employee_management-frontend:latest"
+                        }
                     }
                 }
             }
@@ -103,22 +124,24 @@ pipeline {
 
         stage('Deploy to Minikube') {
             steps {
-                dir('k8s') {
-                    // Verify cluster connection first
+                script {
+                    // Verify Minikube is accessible
                     bat 'kubectl cluster-info'
                     
-                    // Apply Kubernetes manifests
-                    bat 'kubectl apply -f backend-deployment.yaml'
-                    bat 'kubectl apply -f backend-service.yaml'
-                    bat 'kubectl apply -f frontend-deployment.yaml'
-                    bat 'kubectl apply -f frontend-service.yaml'
-
-                    // Wait for deployments to be ready
-                    bat 'kubectl rollout status deployment/backend-deployment --timeout=300s'
-                    bat 'kubectl rollout status deployment/frontend-deployment --timeout=300s'
-                    
-                    // Show final status
-                    bat 'kubectl get pods,services'
+                    dir('k8s') {
+                        // Apply all Kubernetes manifests
+                        bat 'kubectl apply -f .'
+                        
+                        // Wait for deployments to be ready
+                        bat 'kubectl rollout status deployment/backend-deployment --timeout=300s'
+                        
+                        if (fileExists('frontend')) {
+                            bat 'kubectl rollout status deployment/frontend-deployment --timeout=300s'
+                        }
+                        
+                        // Show deployment status
+                        bat 'kubectl get pods,services'
+                    }
                 }
             }
         }
@@ -126,7 +149,12 @@ pipeline {
         stage('Archive Artifacts') {
             steps {
                 archiveArtifacts artifacts: 'backend/target/*.jar', fingerprint: true
-                archiveArtifacts artifacts: 'frontend/build/**', fingerprint: true
+                // Only archive frontend if it exists
+                script {
+                    if (fileExists('frontend/build')) {
+                        archiveArtifacts artifacts: 'frontend/build/**', fingerprint: true
+                    }
+                }
             }
         }
     }
@@ -134,13 +162,18 @@ pipeline {
     post {
         success {
             echo '✅ Build, Docker & Minikube deployment succeeded!'
+            script {
+                // Show final status
+                bat 'kubectl get pods,services'
+            }
         }
         failure {
             echo '❌ Build, Docker or Minikube deployment failed!'
-        }
-        always {
-            // Always show cluster status for debugging
-            bat 'kubectl get pods,services'
+            script {
+                // Debug information
+                bat 'kubectl get pods,services'
+                bat 'kubectl describe pods'
+            }
         }
     }
 }
