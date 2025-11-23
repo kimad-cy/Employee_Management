@@ -59,11 +59,14 @@ pipeline {
         }
 
         stage('Build Frontend') {
-            when { expression { fileExists('frontend') } }
             steps {
-                dir('frontend') {
-                    bat 'npm install'
-                    bat 'npm run build'
+                script {
+                    if (fileExists('frontend')) {
+                        dir('frontend') {
+                            bat 'npm install'
+                            bat 'npm run build'
+                        }
+                    }
                 }
             }
         }
@@ -88,18 +91,20 @@ pipeline {
 
         stage('Push Docker Images to Hub') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: "${DOCKERHUB_CREDENTIALS}", 
-                    usernameVariable: 'DOCKER_USER', 
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    bat 'docker login -u %DOCKER_USER% -p %DOCKER_PASS%'
-                    bat 'docker tag employee_management-backend:latest %DOCKER_USER%/employee_management-backend:latest'
-                    bat 'docker push %DOCKER_USER%/employee_management-backend:latest'
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: "${DOCKERHUB_CREDENTIALS}", 
+                        usernameVariable: 'DOCKER_USER', 
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        bat 'docker login -u %DOCKER_USER% -p %DOCKER_PASS%'
+                        bat 'docker tag employee_management-backend:latest %DOCKER_USER%/employee_management-backend:latest'
+                        bat 'docker push %DOCKER_USER%/employee_management-backend:latest'
 
-                    if (fileExists('frontend')) {
-                        bat 'docker tag employee_management-frontend:latest %DOCKER_USER%/employee_management-frontend:latest'
-                        bat 'docker push %DOCKER_USER%/employee_management-frontend:latest'
+                        if (fileExists('frontend')) {
+                            bat 'docker tag employee_management-frontend:latest %DOCKER_USER%/employee_management-frontend:latest'
+                            bat 'docker push %DOCKER_USER%/employee_management-frontend:latest'
+                        }
                     }
                 }
             }
@@ -110,21 +115,19 @@ pipeline {
                 dir('k8s') {
                     bat 'kubectl apply -f .'
 
-                    // Wait for deployments
                     bat 'kubectl wait --for=condition=available deployment/backend --timeout=300s'
                     bat 'kubectl wait --for=condition=available deployment/mysql --timeout=300s'
-                    if (fileExists('../frontend')) {
-                        bat 'kubectl wait --for=condition=available deployment/frontend --timeout=300s'
+
+                    script {
+                        if (fileExists('../frontend')) {
+                            bat 'kubectl wait --for=condition=available deployment/frontend --timeout=300s'
+                        }
                     }
 
                     bat 'kubectl get pods,services,deployments'
                 }
             }
         }
-
-        
-
-       
 
         stage('Archive Artifacts') {
             steps {
