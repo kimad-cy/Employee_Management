@@ -51,10 +51,10 @@ pipeline {
 
         stage('Configure Minikube Docker') {
             steps {
-                // Make Jenkins use Minikube Docker daemon
-                bat '@FOR /f "tokens=*" %i IN (''minikube docker-env --shell cmd'') DO @%i'
+                bat "@FOR /f \"tokens=*\" %i IN ('minikube docker-env --shell cmd') DO @%i"
             }
         }
+
 
         stage('Build Docker Images') {
             steps {
