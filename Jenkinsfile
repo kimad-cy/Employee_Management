@@ -79,13 +79,17 @@ pipeline {
         stage('Deploy to Minikube') {
             steps {
                 dir('k8s') {
+                    // Set up kubectl to use Minikube context
+                    bat 'kubectl config use-context minikube'
+                    
+                    // Verify connection
+                    bat 'kubectl cluster-info'
+                    
                     // Apply Kubernetes manifests
                     bat 'kubectl apply -f backend-deployment.yaml'
                     bat 'kubectl apply -f backend-service.yaml'
                     bat 'kubectl apply -f frontend-deployment.yaml'
                     bat 'kubectl apply -f frontend-service.yaml'
-
-                    
                 }
             }
         }
