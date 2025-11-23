@@ -49,27 +49,49 @@ pipeline {
             }
         }
 
+        stage('Configure Minikube Docker') {
+            steps {
+                // Make Jenkins use Minikube Docker daemon
+                bat '@FOR /f "tokens=*" %i IN (''minikube docker-env --shell cmd'') DO @%i'
+            }
+        }
+
         stage('Build Docker Images') {
             steps {
                 script {
-                    // Login to Docker Hub
-                    withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        bat "docker login -u %DOCKER_USER% -p %DOCKER_PASS%"
-                    }
-
                     // Build backend image
                     dir('backend') {
-                        bat "docker build -t ${DOCKERHUB_USER}/employee_management-backend:latest ."
+                        bat "docker build -t employee_management-backend:latest ."
                     }
 
                     // Build frontend image
                     dir('frontend') {
-                        bat "docker build -t ${DOCKERHUB_USER}/employee_management-frontend:latest ."
+                        bat "docker build -t employee_management-frontend:latest ."
                     }
 
-                    // Push images to Docker Hub
-                    bat "docker push ${DOCKERHUB_USER}/employee_management-backend:latest"
-                    bat "docker push ${DOCKERHUB_USER}/employee_management-frontend:latest"
+                    // Optional: push to Docker Hub
+                    withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        bat "docker login -u %DOCKER_USER% -p %DOCKER_PASS%"
+                        bat "docker tag employee_management-backend:latest ${DOCKERHUB_USER}/employee_management-backend:latest"
+                        bat "docker tag employee_management-frontend:latest ${DOCKERHUB_USER}/employee_management-frontend:latest"
+                        bat "docker push ${DOCKERHUB_USER}/employee_management-backend:latest"
+                        bat "docker push ${DOCKERHUB_USER}/employee_management-frontend:latest"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Minikube') {
+            steps {
+                dir('k8s') {
+                    // Apply Kubernetes manifests
+                    bat 'kubectl apply -f backend-deployment.yaml'
+                    bat 'kubectl apply -f backend-service.yaml'
+                    bat 'kubectl apply -f frontend-deployment.yaml'
+                    bat 'kubectl apply -f frontend-service.yaml'
+
+                    // Optional: check pods
+                    bat 'kubectl get pods'
                 }
             }
         }
@@ -84,10 +106,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ Build & Docker push succeeded!'
+            echo '✅ Build, Docker & Minikube deployment succeeded!'
         }
         failure {
-            echo '❌ Build or Docker push failed!'
+            echo '❌ Build, Docker or Minikube deployment failed!'
         }
     }
 }
