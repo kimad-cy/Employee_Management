@@ -49,12 +49,7 @@ pipeline {
             }
         }
 
-        stage('Configure Minikube Docker') {
-            steps {
-                bat "@FOR /f \"tokens=*\" %i IN ('minikube docker-env --shell cmd') DO @%i"
-            }
-        }
-
+    
 
         stage('Build Docker Images') {
             steps {
@@ -90,8 +85,7 @@ pipeline {
                     bat 'kubectl apply -f frontend-deployment.yaml'
                     bat 'kubectl apply -f frontend-service.yaml'
 
-                    // Optional: check pods
-                    bat 'kubectl get pods'
+                    
                 }
             }
         }
