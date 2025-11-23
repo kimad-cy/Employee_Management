@@ -23,35 +23,28 @@ pipeline {
             steps {
                 powershell '''
                     Write-Host "=== Starting Minikube ==="
+
+                    # Delete existing cluster if any
+                    minikube stop --all
+                    minikube delete --all
                     
-                    # Clean up any existing instances
-                    minikube stop 2>&1 | Write-Host
-                    minikube delete 2>&1 | Write-Host
-                    
-                    # Start Minikube with appropriate memory settings
-                    Write-Host "Starting Minikube with 2GB memory..."
+                    # Start Minikube
                     minikube start --driver=docker --memory=2048 --cpus=2
                     
-                    # Configure kubectl context
-                    kubectl config use-context minikube
-                    
-                    # Set up Docker to use Minikube's daemon
-                    $envCommand = minikube docker-env
-                    if ($envCommand) {
-                        Invoke-Expression $envCommand
-                        Write-Host "Docker environment configured for Minikube"
-                    } else {
-                        Write-Host "Warning: Could not configure Docker environment"
-                    }
-                    
                     # Wait for cluster to be ready
-                    Write-Host "Waiting for cluster to be ready..."
-                    Start-Sleep -Seconds 30
+                    minikube status --wait=true
+                    kubectl wait --for=condition=Ready nodes --all --timeout=300s
                     
-                    # Verify cluster status
+                    # Configure Docker to use Minikube daemon
+                    Write-Host "Configuring Docker to use Minikube daemon..."
+                    Invoke-Expression (& minikube -p minikube docker-env --shell=powershell)
+                    Write-Host "Docker environment configured for Minikube"
+                    
+                    # Verify cluster
                     kubectl cluster-info
                     kubectl get nodes
                     Write-Host "=== Minikube Ready ==="
+
                 '''
             }
         }
