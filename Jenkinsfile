@@ -77,8 +77,11 @@ pipeline {
         }
         stage('Test Minikube') {
             steps {
-                bat 'minikube status'
-                bat 'kubectl config current-context'
+                 bat '''
+                    REM Start Minikube if not running
+                    minikube status || minikube start
+                    kubectl config use-context minikube
+                '''
             }
         }
 
