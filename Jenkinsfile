@@ -19,6 +19,33 @@ pipeline {
             }
         }
 
+        stage('Start Minikube') {
+            steps {
+                powerscript '''
+                    Write-Host "Stopping any existing Minikube instances..."
+                    minikube stop
+                    minikube delete
+                    
+                    Write-Host "Starting fresh Minikube cluster..."
+                    minikube start `
+                        --driver=docker `
+                        --container-runtime=containerd `
+                        --force `
+                        --memory=4096 `
+                        --cpus=2 `
+                        --wait=all
+                    
+                    Write-Host "Configuring kubectl..."
+                    kubectl config use-context minikube
+                    
+                    Write-Host "Waiting for cluster to be ready..."
+                    Start-Sleep -Seconds 30
+                    kubectl cluster-info
+                    kubectl get nodes
+                '''
+            }
+        }
+
         stage('Build Backend') {
             steps {
                 dir('backend') {
@@ -49,8 +76,6 @@ pipeline {
             }
         }
 
-    
-
         stage('Build Docker Images') {
             steps {
                 script {
@@ -75,24 +100,11 @@ pipeline {
                 }
             }
         }
-        stage('Test Minikube') {
-            steps {
-                 bat '''
-                    REM Start Minikube if not running
-                    minikube status || minikube start --driver=docker
-                    kubectl config use-context minikube
-                '''
-            }
-        }
-
 
         stage('Deploy to Minikube') {
             steps {
                 dir('k8s') {
-                    // Set up kubectl to use Minikube context
-                    bat 'kubectl config use-context minikube'
-                    
-                    // Verify connection
+                    // Verify cluster connection first
                     bat 'kubectl cluster-info'
                     
                     // Apply Kubernetes manifests
@@ -100,6 +112,13 @@ pipeline {
                     bat 'kubectl apply -f backend-service.yaml'
                     bat 'kubectl apply -f frontend-deployment.yaml'
                     bat 'kubectl apply -f frontend-service.yaml'
+
+                    // Wait for deployments to be ready
+                    bat 'kubectl rollout status deployment/backend-deployment --timeout=300s'
+                    bat 'kubectl rollout status deployment/frontend-deployment --timeout=300s'
+                    
+                    // Show final status
+                    bat 'kubectl get pods,services'
                 }
             }
         }
@@ -118,6 +137,10 @@ pipeline {
         }
         failure {
             echo '❌ Build, Docker or Minikube deployment failed!'
+        }
+        always {
+            // Always show cluster status for debugging
+            bat 'kubectl get pods,services'
         }
     }
 }
