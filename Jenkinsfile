@@ -28,6 +28,7 @@ pipeline {
         }
 
         stage('Build Frontend') {
+            when { expression { false } }
             steps {
                 dir('frontend') {
                     bat 'npm install'
