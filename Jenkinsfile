@@ -94,8 +94,8 @@ pipeline {
 
                     bat 'kubectl get pods,services,deployments'
                 }
-            }
         }
+        
 
         stage('Archive Artifacts') {
             steps {
