@@ -25,30 +25,6 @@ pipeline {
             }
         }
 
-        stage('Start Minikube') {
-            steps {
-                powershell """
-                Write-Host '=== Starting Minikube ==='
-
-                # Stop & delete previous minikube (ignore errors)
-                minikube stop -p minikube -ErrorAction SilentlyContinue
-                minikube delete -p minikube -ErrorAction SilentlyContinue
-
-                # Start minikube
-                minikube start --driver=docker --memory=4096 --cpus=2
-
-                # Configure Docker to use Minikube
-                \$dockerEnv = & minikube docker-env --shell powershell
-                if (\$dockerEnv) {
-                    \$dockerEnv -replace 'SET ', '' | Invoke-Expression
-                    Write-Host '✅ Docker configured for Minikube'
-                }
-
-                # Wait for cluster ready
-                minikube status
-                """
-            }
-        }
 
         stage('Build Backend') {
             steps {
@@ -114,14 +90,6 @@ pipeline {
             steps {
                 dir('k8s') {
                     bat 'kubectl apply -f .'
-
-                    bat 'kubectl wait --for=condition=available deployment/backend --timeout=300s'
-                    bat 'kubectl wait --for=condition=available deployment/mysql --timeout=300s'
-
-                    script {
-                        if (fileExists('../frontend')) {
-                            bat 'kubectl wait --for=condition=available deployment/frontend --timeout=300s'
-                        }
                     }
 
                     bat 'kubectl get pods,services,deployments'
