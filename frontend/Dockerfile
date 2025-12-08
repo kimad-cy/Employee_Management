@@ -1,5 +1,6 @@
 # Use an official Node.js image to build the application
 FROM node:18 AS builder
+#Set the working directory 
 
 # Set the working directory
 WORKDIR /app
