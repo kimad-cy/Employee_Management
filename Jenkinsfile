@@ -86,15 +86,15 @@ pipeline {
             }
         }
 
-        stage('Deploy to Minikube') {
-            steps {
-                dir('k8s') {
-                    bat 'kubectl apply -f .'
-                    }
+        // stage('Deploy to Minikube') {
+        //     steps {
+        //         dir('k8s') {
+        //             bat 'kubectl apply -f .'
+        //             }
 
-                    bat 'kubectl get pods,services,deployments'
-                }
-        }
+        //             bat 'kubectl get pods,services,deployments'
+        //         }
+        // }
         
 
         stage('Archive Artifacts') {
