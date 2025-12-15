@@ -86,6 +86,15 @@ pipeline {
             }
         }
 
+        stage('Deploy with Docker Compose') {
+            steps {
+                bat 'docker compose down'
+                bat 'docker compose pull'
+                bat 'docker compose up -d'
+            }
+        }
+
+
         // stage('Deploy to Minikube') {
         //     steps {
         //         dir('k8s') {
