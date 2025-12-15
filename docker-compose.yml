@@ -1,8 +1,17 @@
-
 services:
+  mysql:
+    image: mysql:8
+    container_name: employee-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: employee_db
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+
   backend:
-    build:
-      context: ./backend
+    image: kimadcy/employee_management-backend:latest
     ports:
       - "8080:8080"
     environment:
@@ -15,24 +24,12 @@ services:
       - mysql
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: kimadcy/employee_management-frontend:latest
     ports:
       - "3000:80"
     depends_on:
       - backend
 
-  mysql:
-    image: mysql:8
-    container_name: employee-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: employee_db
-    volumes:
-      - mysql_data:/var/lib/mysql
-    ports:
-      - "3307:3306"
-
 volumes:
   mysql_data:
+
